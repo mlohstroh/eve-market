@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 
@@ -43,4 +45,23 @@ func getItems(context *gin.Context) {
 	}
 
 	context.JSON(http.StatusOK, items)
+}
+
+func (server *Server) getOrders(context *gin.Context) {
+	character := context.MustGet("character").(*Character)
+
+	client := server.oauth.Client(server.ctx, character.Token)
+	resp, err := client.Get(fmt.Sprintf("%v/v1/characters/%v/orders/", "https://esi.evetech.net", character.CharacterID))
+	if err != nil {
+		context.String(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		context.String(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	context.String(http.StatusOK, string(body))
 }

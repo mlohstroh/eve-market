@@ -3,6 +3,7 @@ package main
 import (
 	"io/ioutil"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
@@ -41,5 +42,12 @@ func (server *Server) oauthCallback(c *gin.Context) {
 		return
 	}
 
-	c.String(http.StatusOK, string(body))
+	char, err := server.CreateOrUpdateUserFromESI(body, token)
+	if err != nil {
+		c.String(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	c.SetCookie("character_id", strconv.Itoa(char.CharacterID), 60*60*24*7, "/", "localhost", false, false)
+	c.Redirect(http.StatusTemporaryRedirect, "/character/orders")
 }

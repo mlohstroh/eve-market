@@ -8,6 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/oauth2"
 )
 
@@ -16,6 +18,7 @@ import (
 type Server struct {
 	ctx   context.Context
 	oauth *oauth2.Config
+	db    *mongo.Database
 }
 
 func main() {
@@ -35,8 +38,8 @@ func main() {
 		}
 	})
 
-	scheduler := NewScheduler(1 * time.Hour)
-	scheduler.Schedule("FetchPrices", getPrices, 5*time.Minute)
+	scheduler := NewScheduler(5 * time.Minute)
+	scheduler.Schedule("FetchPrices", getPrices, 1*time.Hour)
 	go scheduler.Run()
 
 	server := newServer()
@@ -47,6 +50,10 @@ func main() {
 
 	router.GET("/oauth/begin", server.oauthBegin)
 	router.GET("/oauth/callback", server.oauthCallback)
+
+	characterGroup := router.Group("/character")
+	characterGroup.Use(server.requireUser())
+	characterGroup.GET("/orders", server.getOrders)
 
 	router.Run(":3000")
 }
@@ -78,8 +85,26 @@ func newServer() *Server {
 		Scopes: []string{"esi-markets.structure_markets.v1", "esi-markets.read_character_orders.v1", "esi-industry.read_character_jobs.v1", "esi-industry.read_character_mining.v1", "esi-contracts.read_character_contracts.v1", "esi-characters.read_blueprints.v1", "esi-assets.read_assets.v1", "esi-skills.read_skills.v1", "esi-skills.read_skillqueue.v1", "esi-ui.open_window.v1", "esi-wallet.read_character_wallet.v1"},
 	}
 
+	mongoURL := os.Getenv("MONGO_URL")
+	if len(mongoURL) == 0 {
+		panic("MONGO_URL is not set")
+	}
+
+	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(mongoURL))
+	if err != nil {
+		panic(fmt.Sprintf("Can't talk to mongo server %v", err))
+	}
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = mongoClient.Connect(ctx)
+	if err != nil {
+		panic(fmt.Sprintf("Can't talk to mongo server %v", err))
+	}
+
+	database := mongoClient.Database("market")
+
 	return &Server{
 		ctx:   context.Background(),
 		oauth: config,
+		db:    database,
 	}
 }
