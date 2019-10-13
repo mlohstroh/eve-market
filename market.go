@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -16,14 +17,12 @@ const esiRoot = "https://esi.evetech.net"
 
 // typeID,groupID,typeName,description,mass,volume,capacity,portionSize,raceID,basePrice,published,marketGroupID,iconID,soundID,graphicID
 type eveType struct {
-	typeID      int64
-	groupID     int64
-	typeName    string
+	TypeID      int64
+	GroupID     int64
+	TypeName    string
 	description string
-	mass        float64
-	volume      float64
-	// pricing data not in SDE
-	price *evePrice
+	Mass        float64
+	Volume      float64
 	// not parsed
 	capacity      float64
 	portionSize   int64
@@ -96,12 +95,12 @@ func loadSDE() error {
 		}
 
 		t := &eveType{
-			typeID:      typeID,
-			groupID:     groupID,
-			typeName:    typeName,
+			TypeID:      typeID,
+			GroupID:     groupID,
+			TypeName:    typeName,
 			description: description,
-			mass:        mass,
-			volume:      volume,
+			Mass:        mass,
+			Volume:      volume,
 		}
 
 		// Add to global array
@@ -146,14 +145,65 @@ func getPrices() error {
 		return err
 	}
 
-	for _, p := range prices {
-		t, err := getTypeFromID(p.TypeID)
+	return nil
+}
 
+var (
+	// Jita
+	theForge = 10000002
+	// 1DQ Imperial Palace
+	importantLocation = []int{60003760, 1030049082711}
+	// The Forge
+	importantRegions = []int{10000002}
+)
+
+func (server *Server) backgroundGetStructureOrders() error {
+	character, err := server.GetAnyCharacter()
+	if err != nil {
+		return err
+	}
+
+	client := server.oauth.Client(server.ctx, character.Token)
+
+	// Public structures
+	for _, region := range importantRegions {
+		orders, err := getAllRegionOrders(region, client)
 		if err != nil {
+			log.Printf("Unable to fetch orders from region %v. Skipping... Error: %v", region, err)
 			continue
 		}
 
-		t.price = p
+		// Ugly filter down
+		filteredOrders := make([]*ESIOrder, 0)
+		for _, o := range orders {
+			if ContainsI(o.Location, importantLocation) {
+				filteredOrders = append(filteredOrders, o)
+			}
+		}
+
+		log.Printf("Got %v orders from region %v", len(filteredOrders), region)
+
+		profileFunction("Save Orders", func() {
+			err = server.saveOrders(filteredOrders)
+			if err != nil {
+				log.Printf("Error saving all orders from region %v. %v", region, err)
+			}
+		})
+	}
+
+	// Private structures
+	for _, location := range importantLocation {
+		orders, err := getAllStructureOrders(location, client)
+		if err != nil {
+			log.Printf("Unable to fetch orders from location %v. Skipping... Error: %v", location, err)
+			continue
+		}
+		log.Printf("Got %v orders for location %v", len(orders), location)
+
+		err = server.saveOrders(orders)
+		if err != nil {
+			log.Printf("Error saving all orders from location %v. %v", location, err)
+		}
 	}
 
 	return nil

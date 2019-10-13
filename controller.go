@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -11,10 +10,9 @@ import (
 
 func getJSONForItem(t *eveType) map[string]interface{} {
 	return map[string]interface{}{
-		"id":     t.typeID,
-		"name":   t.typeName,
-		"volume": t.volume,
-		"price":  t.price,
+		"id":     t.TypeID,
+		"name":   t.TypeName,
+		"volume": t.Volume,
 	}
 }
 
@@ -51,7 +49,7 @@ func (server *Server) getOrders(context *gin.Context) {
 	character := context.MustGet("character").(*Character)
 
 	client := server.oauth.Client(server.ctx, character.Token)
-	resp, err := client.Get(fmt.Sprintf("%v/v1/characters/%v/orders/", "https://esi.evetech.net", character.CharacterID))
+	resp, err := client.Get(urlFor("/v1/characters/%v/orders/", character.CharacterID))
 	if err != nil {
 		context.String(http.StatusBadRequest, err.Error())
 		return

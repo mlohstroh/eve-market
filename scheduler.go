@@ -83,7 +83,12 @@ func (task *SchedulerTask) wrapTaskRun() {
 	defer task.taskRecover()
 	startTime := time.Now()
 
-	task.Task()
+	err := task.Task()
+
+	if err != nil {
+		log.Printf("Job [%s] failed with error %v", task.Name, err)
+		return
+	}
 
 	elapsedDuration := time.Now().Sub(startTime)
 	log.Printf("Job [%s] ran succesfully in %s", task.Name, elapsedDuration.String())

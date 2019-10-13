@@ -61,3 +61,18 @@ func (server *Server) CreateOrUpdateUserFromESI(esiData []byte, token *oauth2.To
 
 	return existing, err
 }
+
+// GetAnyCharacter will return literally any character
+func (server *Server) GetAnyCharacter() (*Character, error) {
+	collection := server.db.Collection("users")
+
+	filter := bson.M{
+		"Token": bson.M{
+			"$exists": true,
+		},
+	}
+	existing := &Character{}
+	err := collection.FindOne(server.ctx, filter).Decode(&existing)
+
+	return existing, err
+}

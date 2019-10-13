@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/oauth2"
@@ -37,12 +38,12 @@ func main() {
 			fmt.Print(err)
 		}
 	})
-
-	scheduler := NewScheduler(5 * time.Minute)
-	scheduler.Schedule("FetchPrices", getPrices, 1*time.Hour)
-	go scheduler.Run()
-
 	server := newServer()
+
+	scheduler := NewScheduler(1 * time.Second)
+	// scheduler.Schedule("FetchPrices", getPrices, 1*time.Hour)
+	scheduler.Schedule("FetchRegionOrdrs", server.backgroundGetStructureOrders, 1*time.Hour)
+	go scheduler.Run()
 
 	router := gin.Default()
 	router.GET("/items/", getItems)
@@ -50,6 +51,10 @@ func main() {
 
 	router.GET("/oauth/begin", server.oauthBegin)
 	router.GET("/oauth/callback", server.oauthCallback)
+
+	marketGroup := router.Group("/market")
+	marketGroup.Use(server.requireUser())
+	marketGroup.GET("/:structure_id", server.getStructureOrders)
 
 	characterGroup := router.Group("/character")
 	characterGroup.Use(server.requireUser())
@@ -101,10 +106,20 @@ func newServer() *Server {
 	}
 
 	database := mongoClient.Database("market")
+	createMongoIndexes(database)
 
 	return &Server{
 		ctx:   context.Background(),
 		oauth: config,
 		db:    database,
 	}
+}
+
+func createMongoIndexes(db *mongo.Database) {
+	uniqueOrderIDs := mongo.IndexModel{
+		Keys: bson.M{
+			"TypeID": 1,
+		},
+	}
+	db.Collection("orders").Indexes().CreateOne(context.Background(), uniqueOrderIDs)
 }
