@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -40,4 +41,46 @@ func (server *Server) saveOrders(orders []*ESIOrder) error {
 	}
 
 	return nil
+}
+
+func (server *Server) getAllTypes(structureID int) ([]int64, error) {
+	query := bson.M{
+		"location": structureID,
+	}
+	types, err := server.db.Collection("orders").Distinct(server.ctx, "typeid", query)
+	if err != nil {
+		return nil, err
+	}
+
+	casted := make([]int64, len(types))
+	for i, t := range types {
+		// How's that for a gross cast?
+		casted[i] = t.(int64)
+	}
+
+	return casted, nil
+}
+
+func (server *Server) getOrdersByType(typeID int64) ([]*ESIOrder, error) {
+	query := bson.M{
+		"typeid": typeID,
+	}
+	cursor, err := server.db.Collection("orders").Find(server.ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	orders := make([]*ESIOrder, 0)
+	defer cursor.Close(server.ctx)
+	for cursor.Next(server.ctx) {
+		o := &ESIOrder{}
+		err = cursor.Decode(&o)
+		if err != nil {
+			log.Printf("Unable to decode order due to %v", err)
+			continue
+		}
+		orders = append(orders, o)
+	}
+
+	return orders, cursor.Err()
 }

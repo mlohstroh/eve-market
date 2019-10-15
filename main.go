@@ -116,10 +116,10 @@ func newServer() *Server {
 }
 
 func createMongoIndexes(db *mongo.Database) {
-	typeId := mongo.IndexModel{
+	typeID := mongo.IndexModel{
 		Keys: bson.M{
 			"TypeID": 1,
 		},
 	}
-	db.Collection("orders").Indexes().CreateOne(context.Background(), typeId)
+	db.Collection("orders").Indexes().CreateOne(context.Background(), typeID)
 }

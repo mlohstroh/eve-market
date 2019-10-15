@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 const esiRoot = "https://esi.evetech.net"
@@ -149,12 +150,11 @@ func getPrices() error {
 }
 
 var (
-	// Jita
-	theForge = 10000002
-	// 1DQ Imperial Palace
-	importantLocation = []int{60003760, 1030049082711}
+	// Jita 4-4 and 1DQ Imperial Palace
+	importantLocations = []int{60003760, 1030049082711}
 	// The Forge
-	importantRegions = []int{10000002}
+	// 10000002
+	importantRegions = []int{}
 )
 
 func (server *Server) backgroundGetStructureOrders() error {
@@ -176,7 +176,7 @@ func (server *Server) backgroundGetStructureOrders() error {
 		// Ugly filter down
 		filteredOrders := make([]*ESIOrder, 0)
 		for _, o := range orders {
-			if ContainsI(o.Location, importantLocation) {
+			if ContainsI(o.Location, importantLocations) {
 				filteredOrders = append(filteredOrders, o)
 			}
 		}
@@ -192,7 +192,7 @@ func (server *Server) backgroundGetStructureOrders() error {
 	}
 
 	// Private structures
-	for _, location := range importantLocation {
+	for _, location := range importantLocations {
 		orders, err := getAllStructureOrders(location, client)
 		if err != nil {
 			log.Printf("Unable to fetch orders from location %v. Skipping... Error: %v", location, err)
@@ -203,6 +203,37 @@ func (server *Server) backgroundGetStructureOrders() error {
 		err = server.saveOrders(orders)
 		if err != nil {
 			log.Printf("Error saving all orders from location %v. %v", location, err)
+		}
+	}
+
+	// Create Report
+	for _, location := range importantLocations {
+		types, err := server.getAllTypes(location)
+
+		if err != nil {
+			log.Printf("Unable to get all distinct types for location %v. Error: %v", location, err)
+			continue
+		}
+
+		log.Printf("%v Unique types for location %v", len(types), location)
+		for _, t := range types {
+			orders, err := server.getOrdersByType(t)
+			if err != nil {
+				log.Printf("Unable to get orders for type %v because %v", t, err)
+				continue
+			}
+
+			log.Printf("Got %v orders for type %v", len(orders), t)
+
+			createdAt := time.Now().UTC().Truncate(1 * time.Hour)
+
+			err = server.createHourlyReport(orders, int64(location), t, createdAt)
+			if err != nil {
+				log.Printf("Unable to create hourly report for type %v because %v", t, err)
+				continue
+			}
+
+			// should we create an daily report?
 		}
 	}
 

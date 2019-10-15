@@ -15,7 +15,7 @@ import (
 type DeserializeFunc func([]byte) (int, error)
 
 // TypeID is just a quick typedef for an int
-type TypeID int
+type TypeID int64
 
 func urlFor(path string, args ...interface{}) string {
 	return fmt.Sprintf("%v%v", "https://esi.evetech.net", fmt.Sprintf(path, args...))
